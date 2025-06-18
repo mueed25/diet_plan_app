@@ -3,16 +3,19 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
   Image,
   Dimensions,
+  StatusBar,
+  Platform,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -47,7 +50,10 @@ interface FoodInfoResponse {
   response: string;
 }
 
-export default function HomeScreen() {
+const HomeScreenContent = () => {
+  const insets = useSafeAreaInsets();
+  const { user, signOut } = useAuth();
+  
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageAsset, setImageAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [loadingState, setLoadingState] = useState<LoadingState>('idle');
@@ -131,16 +137,9 @@ export default function HomeScreen() {
 
   const openCamera = async () => {
     try {
-      console.log('Opening camera...');
-      
       const hasPermission = await requestCameraPermissions();
-      if (!hasPermission) {
-        console.log('Camera permission denied');
-        return;
-      }
+      if (!hasPermission) return;
 
-      console.log('Camera permission granted, launching camera...');
-      
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -148,22 +147,8 @@ export default function HomeScreen() {
         quality: 0.8,
       });
 
-      console.log('Camera result:', { 
-        canceled: result.canceled, 
-        hasAssets: result.assets ? result.assets.length : 0 
-      });
-
       if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        console.log('Selected image asset:', {
-          uri: asset.uri,
-          type: asset.type,
-          fileName: asset.fileName
-        });
-        
-        await handleImageSelection(asset);
-      } else {
-        console.log('Camera operation was canceled or no image selected');
+        await handleImageSelection(result.assets[0]);
       }
     } catch (error) {
       console.error('Camera error:', error);
@@ -173,16 +158,9 @@ export default function HomeScreen() {
 
   const openGallery = async () => {
     try {
-      console.log('Opening gallery...');
-      
       const hasPermission = await requestPermissions();
-      if (!hasPermission) {
-        console.log('Gallery permission denied');
-        return;
-      }
+      if (!hasPermission) return;
 
-      console.log('Gallery permission granted, launching gallery...');
-      
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -190,22 +168,8 @@ export default function HomeScreen() {
         quality: 0.8,
       });
 
-      console.log('Gallery result:', { 
-        canceled: result.canceled, 
-        hasAssets: result.assets ? result.assets.length : 0 
-      });
-
       if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        console.log('Selected image asset:', {
-          uri: asset.uri,
-          type: asset.type,
-          fileName: asset.fileName
-        });
-        
-        await handleImageSelection(asset);
-      } else {
-        console.log('Gallery operation was canceled or no image selected');
+        await handleImageSelection(result.assets[0]);
       }
     } catch (error) {
       console.error('Gallery error:', error);
@@ -215,22 +179,12 @@ export default function HomeScreen() {
 
   const handleImageSelection = async (asset: ImagePicker.ImagePickerAsset) => {
     try {
-      console.log('Processing selected image:', asset.uri);
-      
-      // Set the image URI and asset for display and API use
       setSelectedImage(asset.uri);
       setImageAsset(asset);
       resetState();
-      
-      console.log('Image processing completed successfully');
-      
     } catch (error) {
       console.error('Image selection handling failed:', error);
-      Alert.alert(
-        'Image Processing Error', 
-        'Failed to process the selected image. Please try selecting a different image or take a new photo.'
-      );
-      // Clear the selected image if processing failed
+      Alert.alert('Image Processing Error', 'Failed to process the selected image. Please try selecting a different image.');
       setSelectedImage(null);
       setImageAsset(null);
     }
@@ -255,61 +209,31 @@ export default function HomeScreen() {
     setFollowUpInfo(null);
 
     try {
-      console.log('Preparing API request...');
-      console.log(`Image URI: ${selectedImage}`);
-      console.log('Image asset:', {
-        uri: imageAsset.uri,
-        type: imageAsset.type,
-        fileName: imageAsset.fileName,
-        fileSize: imageAsset.fileSize
-      });
-
-      // Create FormData object exactly like Postman
       const formData = new FormData();
       
-      // Determine the file extension and MIME type
       let fileName = imageAsset.fileName || 'image.jpg';
       let mimeType = imageAsset.type === 'image' ? 'image/jpeg' : (imageAsset.type || 'image/jpeg');
       
-      // Ensure proper file extension
       if (!fileName.includes('.')) {
         fileName = fileName + '.jpg';
       }
       
-      // Add the image file to FormData
       formData.append('image', {
         uri: imageAsset.uri,
         type: mimeType,
         name: fileName,
       } as any);
       
-      // Add the language parameter
       formData.append('lang', 'english');
 
-      console.log('FormData prepared with:', {
-        imageUri: imageAsset.uri,
-        imageName: fileName,
-        imageType: mimeType,
-        lang: 'english'
-      });
-
-      console.log('Sending request to API...');
-      
       const apiResponse = await fetch('https://foodvision-fcsf.onrender.com/detect_food', {
         method: 'POST',
         body: formData,
       });
 
-      console.log(`API Response status: ${apiResponse.status}`);
-      console.log(`API Response ok: ${apiResponse.ok}`);
-      
-      // Get response text first for better error handling
       const responseText = await apiResponse.text();
-      console.log(`API Response text: ${responseText.substring(0, 500)}...`);
       
       if (!apiResponse.ok) {
-        console.log('API Error - Full response:', responseText);
-        
         let errorMessage = `API Error (${apiResponse.status})`;
         
         try {
@@ -324,23 +248,18 @@ export default function HomeScreen() {
             errorMessage = errorJson.message;
           }
         } catch (parseError) {
-          console.error('Failed to parse error response:', parseError);
           errorMessage = responseText || 'Unknown API error';
         }
         
         throw new Error(errorMessage);
       }
 
-      // Parse successful response
       let result: FoodDetectionResponse;
       try {
         result = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('Failed to parse success response:', parseError);
         throw new Error('Invalid response format from server');
       }
-      
-      console.log('API Success response:', result);
       
       if (!result.food_name) {
         throw new Error('No food detected in the image. Please try a clearer image with visible food items.');
@@ -355,7 +274,6 @@ export default function HomeScreen() {
       
       let userFriendlyMessage = errorMessage;
       
-      // Add helpful tips based on error type
       if (errorMessage.includes('422') || errorMessage.includes('Field required') || errorMessage.includes('missing')) {
         userFriendlyMessage = 'Image data validation failed. Please try:\n• Taking a new photo\n• Selecting a different image\n• Ensuring the image is not corrupted';
       } else if (errorMessage.includes('timeout') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
@@ -384,8 +302,6 @@ export default function HomeScreen() {
         info_type: option.apiValue
       };
 
-      console.log('Getting food info:', requestBody);
-      
       const apiResponse = await fetch('https://foodvision-fcsf.onrender.com/food_info', {
         method: 'POST',
         headers: { 
@@ -398,12 +314,10 @@ export default function HomeScreen() {
       const responseText = await apiResponse.text();
       
       if (!apiResponse.ok) {
-        console.log('Food info API error:', responseText);
         throw new Error(`${apiResponse.status}: ${responseText || 'Unknown error'}`);
       }
 
       const result: FoodInfoResponse = JSON.parse(responseText);
-      console.log('Food info success:', result);
       setFollowUpInfo(result);
       
     } catch (err) {
@@ -413,6 +327,17 @@ export default function HomeScreen() {
     } finally {
       setFollowUpLoading(null);
     }
+  };
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: signOut }
+      ]
+    );
   };
 
   const renderImageSection = () => (
@@ -457,12 +382,8 @@ export default function HomeScreen() {
       return (
         <View style={styles.outputSection}>
           <Ionicons name="image-outline" size={48} color="#ccc" />
-          <Text style={styles.outputPlaceholder}>
-            Ready to identify your food!
-          </Text>
-          <Text style={styles.outputSubtext}>
-            Select an image to get started
-          </Text>
+          <Text style={styles.outputPlaceholder}>Ready to identify your food!</Text>
+          <Text style={styles.outputSubtext}>Select an image to get started</Text>
         </View>
       );
     }
@@ -558,17 +479,31 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+      <StatusBar 
+        barStyle="dark-content" 
+        backgroundColor="white" 
+        translucent={false}
+      />
+      
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <Text style={styles.headerTitle}>🍽️ Food Vision</Text>
-        <TouchableOpacity style={styles.headerButton}>
-          <Ionicons name="help-circle-outline" size={24} color="#333" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerButton}>
+            <Ionicons name="help-circle-outline" size={24} color="#333" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton} onPress={handleSignOut}>
+            <Ionicons name="log-out-outline" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: Math.max(insets.bottom, 20) }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {renderImageSection()}
@@ -577,7 +512,15 @@ export default function HomeScreen() {
         {renderFollowUpSection()}
         {renderFollowUpInfo()}
       </ScrollView>
-    </SafeAreaView>
+    </View>
+  );
+};
+
+export default function HomeScreen() {
+  return (
+    <SafeAreaProvider>
+      <HomeScreenContent />
+    </SafeAreaProvider>
   );
 }
 
@@ -606,15 +549,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   headerButton: {
     padding: 8,
+    marginLeft: 8,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
     padding: 20,
-    paddingBottom: 40,
   },
   imageUploadBox: {
     width: '100%',
@@ -626,11 +573,17 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     marginBottom: 20,
     overflow: 'hidden',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#667eea',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   uploadPlaceholder: {
     flex: 1,
@@ -662,16 +615,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#667eea',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   sendButtonDisabled: {
     backgroundColor: '#ccc',
-    shadowOpacity: 0,
-    elevation: 0,
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0,
+      },
+      android: {
+        elevation: 0,
+      },
+    }),
   },
   sendButtonLoading: {
     backgroundColor: '#5a6fd8',
