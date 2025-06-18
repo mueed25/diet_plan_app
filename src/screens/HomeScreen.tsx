@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,152 +6,577 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
-  RefreshControl,
+  ActivityIndicator,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../lib/superbase';
+import * as ImagePicker from 'expo-image-picker';
 
-interface Message {
+const { width, height } = Dimensions.get('window');
+
+interface FollowUpOption {
   id: string;
-  content: string;
-  type: 'input' | 'output';
-  timestamp: Date;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  apiValue: string;
+}
+
+const followUpOptions: FollowUpOption[] = [
+  { id: 'calories', label: 'Calories', icon: 'flame-outline', apiValue: 'calories' },
+  { id: 'diabetic', label: 'Diabetic Friendly', icon: 'medical-outline', apiValue: 'diabetic_friendly' },
+  { id: 'preparation', label: 'Preparation Method', icon: 'restaurant-outline', apiValue: 'preparation_method' },
+  { id: 'ingredients', label: 'Ingredients', icon: 'list-outline', apiValue: 'ingredients' },
+  { id: 'nutritional', label: 'Nutritional Content', icon: 'nutrition-outline', apiValue: 'nutritional_content' },
+  { id: 'allergen', label: 'Allergen Info', icon: 'warning-outline', apiValue: 'allergen_info' },
+  { id: 'hypertension', label: 'Hypertension Guidelines', icon: 'heart-outline', apiValue: 'hypertension_friendly' },
+  { id: 'kidney', label: 'Kidney Safe', icon: 'water-outline', apiValue: 'kidney_safe' },
+];
+
+type LoadingState = 'idle' | 'loading' | 'success' | 'error';
+
+interface FoodDetectionResponse {
+  food_name: string;
+  options: string[];
+}
+
+interface FoodInfoResponse {
+  food_name: string;
+  info_type: string;
+  response: string;
 }
 
 export default function HomeScreen() {
-  const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageAsset, setImageAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [loadingState, setLoadingState] = useState<LoadingState>('idle');
+  const [followUpLoading, setFollowUpLoading] = useState<string | null>(null);
+  const [detectionResponse, setDetectionResponse] = useState<FoodDetectionResponse | null>(null);
+  const [followUpInfo, setFollowUpInfo] = useState<FoodInfoResponse | null>(null);
+  const [error, setError] = useState<string>('');
 
-  const handleSend = async () => {
-    if (!inputText.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: inputText.trim(),
-      type: 'input',
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Simulate processing
-    setLoading(true);
-    setInputText('');
-
+  const requestPermissions = async () => {
     try {
-      // Here you would typically make an API call to process the input
-      // For now, we'll simulate a response
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      const responseMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: `Processed: ${userMessage.content}`,
-        type: 'output',
-        timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, responseMessage]);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required', 
+          'We need gallery permissions to select images. Please enable it in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => console.log('Open settings') }
+          ]
+        );
+        return false;
+      }
+      return true;
     } catch (error) {
-      Alert.alert('Error', 'Failed to process your request');
-    } finally {
-      setLoading(false);
+      console.error('Permission request failed:', error);
+      Alert.alert('Error', 'Failed to request permissions. Please try again.');
+      return false;
     }
   };
 
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    // Simulate refresh
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  }, []);
+  const requestCameraPermissions = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Camera Permission Required', 
+          'We need camera permissions to take photos. Please enable it in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => console.log('Open settings') }
+          ]
+        );
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Camera permission request failed:', error);
+      Alert.alert('Error', 'Failed to request camera permissions. Please try again.');
+      return false;
+    }
+  };
 
-  const MessageBubble = ({ message }: { message: Message }) => (
-    <View
-      style={[
-        styles.messageBubble,
-        message.type === 'input' ? styles.inputBubble : styles.outputBubble,
-      ]}
-    >
-      <Text
-        style={[
-          styles.messageText,
-          message.type === 'input' ? styles.inputText : styles.outputText,
-        ]}
-      >
-        {message.content}
-      </Text>
-      <Text style={styles.timestamp}>
-        {message.timestamp.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit'
-        })}
-      </Text>
-    </View>
+  const pickImage = async () => {
+    try {
+      Alert.alert(
+        'Select Image', 
+        'Choose how you want to add an image',
+        [
+          { 
+            text: 'Take Photo', 
+            onPress: () => openCamera(),
+            style: 'default'
+          },
+          { 
+            text: 'Choose from Gallery', 
+            onPress: () => openGallery(),
+            style: 'default'
+          },
+          { 
+            text: 'Cancel', 
+            style: 'cancel' 
+          },
+        ],
+        { cancelable: true }
+      );
+    } catch (error) {
+      console.error('Pick image error:', error);
+      Alert.alert('Error', 'Failed to open image picker. Please try again.');
+    }
+  };
+
+  const openCamera = async () => {
+    try {
+      console.log('Opening camera...');
+      
+      const hasPermission = await requestCameraPermissions();
+      if (!hasPermission) {
+        console.log('Camera permission denied');
+        return;
+      }
+
+      console.log('Camera permission granted, launching camera...');
+      
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      console.log('Camera result:', { 
+        canceled: result.canceled, 
+        hasAssets: result.assets ? result.assets.length : 0 
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        console.log('Selected image asset:', {
+          uri: asset.uri,
+          type: asset.type,
+          fileName: asset.fileName
+        });
+        
+        await handleImageSelection(asset);
+      } else {
+        console.log('Camera operation was canceled or no image selected');
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Camera Error', 'Failed to open camera. Please try again or use gallery instead.');
+    }
+  };
+
+  const openGallery = async () => {
+    try {
+      console.log('Opening gallery...');
+      
+      const hasPermission = await requestPermissions();
+      if (!hasPermission) {
+        console.log('Gallery permission denied');
+        return;
+      }
+
+      console.log('Gallery permission granted, launching gallery...');
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      console.log('Gallery result:', { 
+        canceled: result.canceled, 
+        hasAssets: result.assets ? result.assets.length : 0 
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        console.log('Selected image asset:', {
+          uri: asset.uri,
+          type: asset.type,
+          fileName: asset.fileName
+        });
+        
+        await handleImageSelection(asset);
+      } else {
+        console.log('Gallery operation was canceled or no image selected');
+      }
+    } catch (error) {
+      console.error('Gallery error:', error);
+      Alert.alert('Gallery Error', 'Failed to open gallery. Please try again or use camera instead.');
+    }
+  };
+
+  const handleImageSelection = async (asset: ImagePicker.ImagePickerAsset) => {
+    try {
+      console.log('Processing selected image:', asset.uri);
+      
+      // Set the image URI and asset for display and API use
+      setSelectedImage(asset.uri);
+      setImageAsset(asset);
+      resetState();
+      
+      console.log('Image processing completed successfully');
+      
+    } catch (error) {
+      console.error('Image selection handling failed:', error);
+      Alert.alert(
+        'Image Processing Error', 
+        'Failed to process the selected image. Please try selecting a different image or take a new photo.'
+      );
+      // Clear the selected image if processing failed
+      setSelectedImage(null);
+      setImageAsset(null);
+    }
+  };
+
+  const resetState = () => {
+    setLoadingState('idle');
+    setDetectionResponse(null);
+    setFollowUpInfo(null);
+    setError('');
+    setFollowUpLoading(null);
+  };
+
+  const sendImageToAPI = async () => {
+    if (!selectedImage || !imageAsset) {
+      Alert.alert('No Image Selected', 'Please select an image first by tapping the upload area.');
+      return;
+    }
+
+    setLoadingState('loading');
+    setError('');
+    setFollowUpInfo(null);
+
+    try {
+      console.log('Preparing API request...');
+      console.log(`Image URI: ${selectedImage}`);
+      console.log('Image asset:', {
+        uri: imageAsset.uri,
+        type: imageAsset.type,
+        fileName: imageAsset.fileName,
+        fileSize: imageAsset.fileSize
+      });
+
+      // Create FormData object exactly like Postman
+      const formData = new FormData();
+      
+      // Determine the file extension and MIME type
+      let fileName = imageAsset.fileName || 'image.jpg';
+      let mimeType = imageAsset.type === 'image' ? 'image/jpeg' : (imageAsset.type || 'image/jpeg');
+      
+      // Ensure proper file extension
+      if (!fileName.includes('.')) {
+        fileName = fileName + '.jpg';
+      }
+      
+      // Add the image file to FormData
+      formData.append('image', {
+        uri: imageAsset.uri,
+        type: mimeType,
+        name: fileName,
+      } as any);
+      
+      // Add the language parameter
+      formData.append('lang', 'english');
+
+      console.log('FormData prepared with:', {
+        imageUri: imageAsset.uri,
+        imageName: fileName,
+        imageType: mimeType,
+        lang: 'english'
+      });
+
+      console.log('Sending request to API...');
+      
+      const apiResponse = await fetch('https://foodvision-fcsf.onrender.com/detect_food', {
+        method: 'POST',
+        body: formData,
+      });
+
+      console.log(`API Response status: ${apiResponse.status}`);
+      console.log(`API Response ok: ${apiResponse.ok}`);
+      
+      // Get response text first for better error handling
+      const responseText = await apiResponse.text();
+      console.log(`API Response text: ${responseText.substring(0, 500)}...`);
+      
+      if (!apiResponse.ok) {
+        console.log('API Error - Full response:', responseText);
+        
+        let errorMessage = `API Error (${apiResponse.status})`;
+        
+        try {
+          const errorJson = JSON.parse(responseText);
+          if (errorJson.detail) {
+            if (Array.isArray(errorJson.detail)) {
+              errorMessage = errorJson.detail.map((d: any) => `${d.loc?.join('.')} - ${d.msg}`).join(', ');
+            } else {
+              errorMessage = errorJson.detail;
+            }
+          } else if (errorJson.message) {
+            errorMessage = errorJson.message;
+          }
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          errorMessage = responseText || 'Unknown API error';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      // Parse successful response
+      let result: FoodDetectionResponse;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse success response:', parseError);
+        throw new Error('Invalid response format from server');
+      }
+      
+      console.log('API Success response:', result);
+      
+      if (!result.food_name) {
+        throw new Error('No food detected in the image. Please try a clearer image with visible food items.');
+      }
+
+      setDetectionResponse(result);
+      setLoadingState('success');
+
+    } catch (err) {
+      console.error('Detection failed:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      
+      let userFriendlyMessage = errorMessage;
+      
+      // Add helpful tips based on error type
+      if (errorMessage.includes('422') || errorMessage.includes('Field required') || errorMessage.includes('missing')) {
+        userFriendlyMessage = 'Image data validation failed. Please try:\n• Taking a new photo\n• Selecting a different image\n• Ensuring the image is not corrupted';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        userFriendlyMessage = 'Network connection error. Please:\n• Check your internet connection\n• Try again in a few moments\n• Make sure you have a stable connection';
+      } else if (errorMessage.includes('No food detected')) {
+        userFriendlyMessage = errorMessage + '\n\nTips for better detection:\n• Ensure good lighting\n• Center the food in the frame\n• Use a clear, focused image\n• Make sure food is clearly visible';
+      }
+      
+      setError(userFriendlyMessage);
+      setLoadingState('error');
+    }
+  };
+
+  const handleFollowUp = async (option: FollowUpOption) => {
+    if (!detectionResponse?.food_name) {
+      Alert.alert('Error', 'No food detected yet. Please detect food first.');
+      return;
+    }
+
+    setFollowUpLoading(option.id);
+    setFollowUpInfo(null);
+
+    try {
+      const requestBody = {
+        food_name: detectionResponse.food_name,
+        info_type: option.apiValue
+      };
+
+      console.log('Getting food info:', requestBody);
+      
+      const apiResponse = await fetch('https://foodvision-fcsf.onrender.com/food_info', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseText = await apiResponse.text();
+      
+      if (!apiResponse.ok) {
+        console.log('Food info API error:', responseText);
+        throw new Error(`${apiResponse.status}: ${responseText || 'Unknown error'}`);
+      }
+
+      const result: FoodInfoResponse = JSON.parse(responseText);
+      console.log('Food info success:', result);
+      setFollowUpInfo(result);
+      
+    } catch (err) {
+      console.error('Follow-up failed:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      Alert.alert('Information Error', `Failed to get ${option.label.toLowerCase()} information. Please try again.\n\nError: ${errorMessage}`);
+    } finally {
+      setFollowUpLoading(null);
+    }
+  };
+
+  const renderImageSection = () => (
+    <TouchableOpacity style={styles.imageUploadBox} onPress={pickImage}>
+      {selectedImage ? (
+        <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
+      ) : (
+        <View style={styles.uploadPlaceholder}>
+          <Ionicons name="camera-outline" size={48} color="#667eea" />
+          <Text style={styles.uploadText}>Snap / Upload Food Image</Text>
+          <Text style={styles.uploadSubtext}>Center the food for best results</Text>
+        </View>
+      )}
+    </TouchableOpacity>
   );
+
+  const renderSendButton = () => (
+    <TouchableOpacity
+      style={[
+        styles.sendButton,
+        (!selectedImage || !imageAsset) && styles.sendButtonDisabled,
+        loadingState === 'loading' && styles.sendButtonLoading,
+      ]}
+      onPress={sendImageToAPI}
+      disabled={!selectedImage || !imageAsset || loadingState === 'loading'}
+    >
+      {loadingState === 'loading' ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="white" size="small" />
+          <Text style={styles.loadingButtonText}>Detecting...</Text>
+        </View>
+      ) : (
+        <Text style={styles.sendButtonText}>
+          🔍 {selectedImage && imageAsset ? 'Detect Food' : 'Select Image First'}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+
+  const renderOutputSection = () => {
+    if (loadingState === 'idle' && !selectedImage) {
+      return (
+        <View style={styles.outputSection}>
+          <Ionicons name="image-outline" size={48} color="#ccc" />
+          <Text style={styles.outputPlaceholder}>
+            Ready to identify your food!
+          </Text>
+          <Text style={styles.outputSubtext}>
+            Select an image to get started
+          </Text>
+        </View>
+      );
+    }
+
+    if (selectedImage && !imageAsset) {
+      return (
+        <View style={styles.outputSection}>
+          <ActivityIndicator size="large" color="#667eea" />
+          <Text style={styles.loadingText}>Processing image...</Text>
+          <Text style={styles.loadingSubtext}>Preparing image data</Text>
+        </View>
+      );
+    }
+
+    if (loadingState === 'loading') {
+      return (
+        <View style={styles.outputSection}>
+          <ActivityIndicator size="large" color="#667eea" />
+          <Text style={styles.loadingText}>Analyzing your food image...</Text>
+          <Text style={styles.loadingSubtext}>This may take a few seconds</Text>
+        </View>
+      );
+    }
+
+    if (loadingState === 'error') {
+      return (
+        <View style={styles.outputSection}>
+          <Ionicons name="alert-circle-outline" size={48} color="#ff6b6b" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={sendImageToAPI}>
+            <Text style={styles.retryButtonText}>🔄 Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (loadingState === 'success' && detectionResponse) {
+      return (
+        <View style={styles.outputSection}>
+          <Ionicons name="checkmark-circle-outline" size={48} color="#4CAF50" />
+          <Text style={styles.resultLabel}>Food Detected:</Text>
+          <Text style={styles.resultText}>{detectionResponse.food_name}</Text>
+        </View>
+      );
+    }
+
+    return null;
+  };
+
+  const renderFollowUpSection = () => {
+    if (loadingState !== 'success' || !detectionResponse) return null;
+
+    return (
+      <View style={styles.followUpSection}>
+        <Text style={styles.followUpTitle}>
+          What would you like to know about "{detectionResponse.food_name}"?
+        </Text>
+        <View style={styles.followUpGrid}>
+          {followUpOptions.map((option) => (
+            <TouchableOpacity
+              key={option.id}
+              style={[
+                styles.followUpButton,
+                followUpLoading === option.id && styles.followUpButtonLoading,
+              ]}
+              onPress={() => handleFollowUp(option)}
+              disabled={!!followUpLoading}
+            >
+              {followUpLoading === option.id ? (
+                <ActivityIndicator size="small" color="#667eea" />
+              ) : (
+                <Ionicons name={option.icon} size={24} color="#667eea" />
+              )}
+              <Text style={styles.followUpButtonText}>{option.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderFollowUpInfo = () => {
+    if (!followUpInfo) return null;
+
+    return (
+      <View style={styles.infoSection}>
+        <Text style={styles.infoLabel}>
+          {followUpOptions.find(opt => opt.apiValue === followUpInfo.info_type)?.label || followUpInfo.info_type}
+        </Text>
+        <Text style={styles.infoText}>{followUpInfo.response}</Text>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Home</Text>
+        <Text style={styles.headerTitle}>🍽️ Food Vision</Text>
         <TouchableOpacity style={styles.headerButton}>
-          <Ionicons name="notifications-outline" size={24} color="#333" />
+          <Ionicons name="help-circle-outline" size={24} color="#333" />
         </TouchableOpacity>
       </View>
 
       <ScrollView
-        style={styles.messagesContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {messages.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="chatbubble-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyStateText}>
-              Start a conversation by typing below
-            </Text>
-          </View>
-        ) : (
-          messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))
-        )}
-        
-        {loading && (
-          <View style={styles.loadingBubble}>
-            <Text style={styles.loadingText}>Processing...</Text>
-          </View>
-        )}
+        {renderImageSection()}
+        {renderSendButton()}
+        {renderOutputSection()}
+        {renderFollowUpSection()}
+        {renderFollowUpInfo()}
       </ScrollView>
-
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Type your message..."
-          value={inputText}
-          onChangeText={setInputText}
-          multiline
-          maxLength={500}
-          placeholderTextColor="#999"
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!inputText.trim() || loading}
-        >
-          <Ionicons
-            name="send"
-            size={20}
-            color={inputText.trim() ? 'white' : '#ccc'}
-          />
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -170,6 +595,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e1e5e9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   headerTitle: {
     fontSize: 24,
@@ -179,94 +609,227 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 8,
   },
-  messagesContainer: {
+  content: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
   },
-  emptyState: {
+  contentContainer: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  imageUploadBox: {
+    width: '100%',
+    height: height * 0.25,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#667eea',
+    borderStyle: 'dashed',
+    marginBottom: 20,
+    overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  uploadPlaceholder: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 100,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 15,
-  },
-  messageBubble: {
-    padding: 12,
-    borderRadius: 18,
-    marginVertical: 4,
-    maxWidth: '80%',
-  },
-  inputBubble: {
-    backgroundColor: '#667eea',
-    alignSelf: 'flex-end',
-  },
-  outputBubble: {
-    backgroundColor: 'white',
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 20,
-  },
-  inputText: {
-    color: 'white',
-  },
-  outputText: {
-    color: '#333',
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
-  loadingBubble: {
-    backgroundColor: '#f0f0f0',
-    padding: 12,
-    borderRadius: 18,
-    alignSelf: 'flex-start',
-    marginVertical: 4,
-  },
-  loadingText: {
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#e1e5e9',
   },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxHeight: 100,
-    fontSize: 16,
-    marginRight: 10,
+  uploadText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#667eea',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  uploadSubtext: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  selectedImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   sendButton: {
     backgroundColor: '#667eea',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   sendButtonDisabled: {
+    backgroundColor: '#ccc',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  sendButtonLoading: {
+    backgroundColor: '#5a6fd8',
+  },
+  sendButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loadingButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  outputSection: {
+    backgroundColor: 'white',
+    padding: 24,
+    borderRadius: 12,
+    marginBottom: 20,
+    alignItems: 'center',
+    minHeight: 140,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  outputPlaceholder: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginTop: 12,
+  },
+  outputSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#667eea',
+    marginTop: 12,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ff6b6b',
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: '#ff6b6b',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  resultLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  resultText: {
+    fontSize: 20,
+    color: '#667eea',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  followUpSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  followUpTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  followUpGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  followUpButton: {
+    width: '48%',
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+    minHeight: 85,
+    justifyContent: 'center',
+  },
+  followUpButtonLoading: {
     backgroundColor: '#f0f0f0',
+  },
+  followUpButtonText: {
+    fontSize: 12,
+    color: '#333',
+    marginTop: 8,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  infoSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#667eea',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  infoLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#667eea',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
   },
 });

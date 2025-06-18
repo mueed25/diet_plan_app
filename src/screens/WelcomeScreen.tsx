@@ -6,9 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  Dimensions,
+  StatusBar,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 
@@ -16,123 +16,164 @@ type WelcomeScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Welcome'>;
 };
 
-const { width, height } = Dimensions.get('window');
-
 export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.gradient}
-      >
+    <>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <SafeAreaView style={styles.container}>
         <View style={styles.content}>
+          {/* Header Section */}
           <View style={styles.header}>
-            <Text style={styles.title}>Welcome to</Text>
-            <Text style={styles.appName}>MyApp</Text>
+            <View style={styles.iconContainer}>
+              <Ionicons name="restaurant-outline" size={48} color="#2D5016" />
+            </View>
+            <Text style={styles.appName}>ChopWise</Text>
             <Text style={styles.subtitle}>
-              Your journey starts here
+              Snap, Know your food and chop wisely!
             </Text>
           </View>
 
+          {/* Illustration Section */}
           <View style={styles.illustration}>
-            {/* Add your illustration/logo here */}
-            <View style={styles.placeholderIllustration} />
+            <View style={styles.featureCard}>
+              <Ionicons name="camera-outline" size={32} color="#4A7C59" />
+              <Text style={styles.featureTitle}>Chakam</Text>
+              <Text style={styles.featureText}>
+                Snap or upload a photo of your food to instantly identify it and get detailed information.
+              </Text>
+            </View>
           </View>
 
+          {/* Action Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={styles.continueButton}
+              style={styles.primaryButton}
               onPress={() => navigation.navigate('SignUp')}
+              activeOpacity={0.8}
             >
-              <Text style={styles.continueButtonText}>Get Started</Text>
+              <Text style={styles.primaryButtonText}>Get Started</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.signInButton}
+              style={styles.secondaryButton}
               onPress={() => navigation.navigate('SignIn')}
+              activeOpacity={0.7}
             >
-              <Text style={styles.signInButtonText}>Already have an account?</Text>
+              <Text style={styles.secondaryButtonText}>Already have an account</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </LinearGradient>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  gradient: {
-    flex: 1,
+    backgroundColor: '#ffffff',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 30,
-    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    paddingBottom: 32,
   },
   header: {
     alignItems: 'center',
-    marginTop: height * 0.1,
+    paddingTop: 60,
+    paddingBottom: 80,
   },
-  title: {
-    fontSize: 24,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '300',
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F8FAF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E8F5E8',
   },
   appName: {
-    fontSize: 48,
-    color: 'white',
-    fontWeight: 'bold',
-    marginVertical: 10,
+    fontSize: 32,
+    color: '#1a1a1a',
+    fontWeight: '700',
+    marginBottom: 16,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#666666',
     textAlign: 'center',
-    marginTop: 10,
+    lineHeight: 24,
+    paddingHorizontal: 32,
+    fontWeight: '400',
   },
   illustration: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 40,
   },
-  placeholderIllustration: {
-    width: 200,
-    height: 200,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 100,
+  featureCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  featureTitle: {
+    fontSize: 20,
+    color: '#1a1a1a',
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  featureText: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 16,
   },
   buttonContainer: {
-    marginBottom: 50,
+    paddingTop: 40,
+    gap: 12,
   },
-  continueButton: {
-    backgroundColor: 'white',
+  primaryButton: {
+    backgroundColor: '#2D5016',
     paddingVertical: 16,
-    borderRadius: 30,
+    borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowColor: '#2D5016',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  continueButtonText: {
-    color: '#667eea',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  signInButton: {
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  signInButtonText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+  primaryButtonText: {
+    color: '#ffffff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#ffffff',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  secondaryButtonText: {
+    color: '#2D5016',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
