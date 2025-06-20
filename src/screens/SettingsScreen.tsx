@@ -3,22 +3,23 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Switch,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function SettingsScreen() {
+
+const SettingsScreenContent = () => {
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = React.useState(false);
 
   const handleAbout = () => {
     Alert.alert(
       'About',
-      'MyApp v1.0.0\n\nBuilt with React Native and Supabase',
+      'Ejaztech FoodVision v1.0.0\n\nBuilt for Everyone ',
       [{ text: 'OK' }]
     );
   };
@@ -89,6 +90,14 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+export default function SettingsScreen() {
+  return (
+    <SafeAreaProvider>
+      <SettingsScreenContent />
+    </SafeAreaProvider>
   );
 }
 

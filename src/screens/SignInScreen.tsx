@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/superbase';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
+import { useAuth } from '../context/AuthContext';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 type SignInScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'SignIn'>;
@@ -25,28 +27,10 @@ export default function SignInScreen({ navigation }: SignInScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signIn } = useAuth();
 
   const handleSignIn = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        Alert.alert('Sign In Error', error.message);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Something went wrong');
-    } finally {
-      setLoading(false);
-    }
+    signIn(email, password)
   };
 
   return (

@@ -47,13 +47,6 @@ export default function MainTabNavigator() {
         }}
       />
       <Tab.Screen 
-        name="Profile" 
-        component={ProfileScreen}
-        options={{
-          tabBarLabel: 'Profile',
-        }}
-      />
-      <Tab.Screen 
         name="Settings" 
         component={SettingsScreen}
         options={{

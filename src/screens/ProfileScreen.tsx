@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Alert,
@@ -12,6 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/superbase';
+import { useAuth } from '../context/AuthContext';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 interface UserProfile {
   id: string;
@@ -19,10 +21,11 @@ interface UserProfile {
   age?: number;
 }
 
-export default function ProfileScreen() {
+const ProfileScreenContent = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { signOut } = useAuth();
 
   useEffect(() => {
     fetchProfile();
@@ -53,14 +56,7 @@ export default function ProfileScreen() {
   };
 
   const handleSignOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        Alert.alert('Error', 'Failed to sign out');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Something went wrong');
-    }
+    signOut()
   };
 
   const onRefresh = React.useCallback(() => {
@@ -127,6 +123,14 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+export default function ProfileScreen() {
+  return (
+    <SafeAreaProvider>
+      <ProfileScreenContent />
+    </SafeAreaProvider>
   );
 }
 

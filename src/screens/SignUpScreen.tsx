@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/superbase';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
+import { useAuth } from '../context/AuthContext'
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 type SignUpScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'SignUp'>;
@@ -26,44 +28,35 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signUp} = useAuth()
 
   const handleSignUp = async () => {
-    if (!email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+  if (password !== confirmPassword) {
+    Alert.alert('Error', 'Passwords do not match.');
+    return;
+  }
 
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
+  setLoading(true);
+  const { error } = await signUp(email, password);
+  setLoading(false);
 
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return;
-    }
+  if (error) {
+    Alert.alert('Sign Up Failed', error.message);
+    return;
+  }
 
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+  Alert.alert(
+    'Check Your Email',
+    'A confirmation link has been sent to your email. Please verify your account before signing in.',
+    [
+      {
+        text: 'OK',
+        onPress: () => navigation.navigate('SignIn'),
+      },
+    ]
+  );
+};
 
-      if (error) {
-        Alert.alert('Sign Up Error', error.message);
-      } else {
-        Alert.alert(
-          'Success',
-          'Account created successfully! Please check your email for verification.'
-        );
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Something went wrong');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container}>

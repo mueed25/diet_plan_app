@@ -142,9 +142,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      email: email.trim().toLowerCase(),
+      password,
+      options: {
+        emailRedirectTo: 'myapp://login', // Add your deep link here
+      },
+    });
 
       if (error) {
         console.error('Sign up error:', error);

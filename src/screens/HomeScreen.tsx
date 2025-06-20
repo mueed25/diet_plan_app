@@ -348,7 +348,7 @@ const HomeScreenContent = () => {
         <View style={styles.uploadPlaceholder}>
           <Ionicons name="camera-outline" size={48} color="#667eea" />
           <Text style={styles.uploadText}>Snap / Upload Food Image</Text>
-          <Text style={styles.uploadSubtext}>Center the food for best results</Text>
+          <Text style={styles.uploadSubtext}>to instantly identify it and get detailed imformation</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -378,15 +378,6 @@ const HomeScreenContent = () => {
   );
 
   const renderOutputSection = () => {
-    if (loadingState === 'idle' && !selectedImage) {
-      return (
-        <View style={styles.outputSection}>
-          <Ionicons name="image-outline" size={48} color="#ccc" />
-          <Text style={styles.outputPlaceholder}>Ready to identify your food!</Text>
-          <Text style={styles.outputSubtext}>Select an image to get started</Text>
-        </View>
-      );
-    }
 
     if (selectedImage && !imageAsset) {
       return (

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 
+
 type WelcomeScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Welcome'>;
 };
@@ -27,17 +28,16 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
             <View style={styles.iconContainer}>
               <Ionicons name="restaurant-outline" size={48} color="#2D5016" />
             </View>
-            <Text style={styles.appName}>ChopWise</Text>
+            <Text style={styles.appName}>FoodVision</Text>
             <Text style={styles.subtitle}>
-              Snap, Know your food and chop wisely!
+              Snap, Know your food and Eat wisely!
             </Text>
           </View>
 
           {/* Illustration Section */}
           <View style={styles.illustration}>
             <View style={styles.featureCard}>
-              <Ionicons name="camera-outline" size={32} color="#4A7C59" />
-              <Text style={styles.featureTitle}>Chakam</Text>
+              <Text style={styles.featureTitle}>powered by ejaztech ai</Text>
               <Text style={styles.featureText}>
                 Snap or upload a photo of your food to instantly identify it and get detailed information.
               </Text>

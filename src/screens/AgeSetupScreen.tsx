@@ -58,7 +58,7 @@ export default function AgeSetupScreen({ navigation, route }: AgeSetupScreenProp
         {
           text: 'Continue',
           onPress: () => {
-            // Navigation will be handled by auth state listener
+            navigation.navigate('Main');
           }
         }
       ]);
